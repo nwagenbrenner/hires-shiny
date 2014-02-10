@@ -1,79 +1,119 @@
 library(shiny)
-#library(windtools)
+library(windtools)
+library(RSQLite)
 
-#set default db as src
-#db<-'/home/natalie/test/src.sqlite'
+#set some initial data
+#db_src<-'/FVS/shiny-server/shinyWindTools/src.sqlite'
+db_src<-'/home/natalie/test/src.sqlite'
 
-# Define server logic required to plot various variables against mpg
+#db_bsb<-'/FVS/shiny-server/shinyWindTools/bsb.sqlite'
+db_bsb<-'/home/natalie/test/bsb.sqlite'
+
+#sloooow:
+#src_mindate<-dbFetch(db_src, "SELECT MINdate_time) FROM mean_flow_obs")
+#set manually for now
+src_mindate<-'2011-07-13 23:00:00'
+src_maxdate<-'2011-09-14 03:13:30'
+#src_plot_ids<-dbFetch(db_src, "SELECT DISTINCT plot_id FROM mean_flow_obs")
+src_plot_ids<-c("K1", "K2", "NE1", "NE2", "NE3", "NE4",     
+                "NM1", "NM2", "NM3", "NM4", "NW1", "NW2",     
+                "NW3", "NW4", "Natalie1", "Natalie2", "Natalie3", "Natalie4",
+                "SE1", "SE2", "SE3", "SE4", "SE5", "SM1",     
+                "SM4", "SW2", "SW3", "SW4")  
+
+bsb_mindate<-'2010-06-13 00:00:00'
+bsb_maxdate<-'2010-09-10 13:01:32'
+#bsb_plot_ids<-dbFetch(db_bsb, "SELECT DISTINCT plot_id FROM mean_flow_obs")
+bsb_plot_ids<-c("R1", "R10", "R11", "R12", "R13", "R14", "R15", "R16",
+                "R17", "R18", "R19", "R2", "R20", "R21", "R22", "R23", 
+                "R24", "R25", "R26", "R27", "R28", "R29", "R3",  "R30",   
+                "R31", "R32", "R33", "R34", "R35", "R4", "R5",  "R6",    
+                "R7",  "R8",  "R9",  "TSW1", "TSW10", "TSW11", "TSW12", "TSW13", 
+                "TSW2", "TSW3", "TSW4", "TSW5", "TSW6", "TSW7", "TSW8", "TSW9",  
+                "TWSW1", "TWSW10", "TWSW11", "TWSW3",  "TWSW4",  "TWSW5",  "TWSW6",  "TWSW8", 
+                "TWSW9")
+    
+# Define server logic
 shinyServer(function(input, output) {
   
-  # Compute the forumla text in a reactive expression since it is 
-  # shared by the output$caption and output$mpgPlot expressions
-  
+  # Compute the forumla text in a reactive expression
   formulaText <- reactive({
-    paste("Wind Speed: ")
-    #paste("Wind Speed: ", input$variable)
-  })
-  formulaText1 <- reactive({
-    paste("Site Location: ", input$site)
+    paste("Wind Speed: ", input$variable)
   })
 
   # Return the formula text for printing as a caption
-  output$caption1 <- renderText({
-    formulaText1()
-  })
-  
   output$caption <- renderText({
     formulaText()
   })
 
-  # Generate a plot of the requested sensor speed 
-  #output$speedPlot <- renderPlot({
-  #  s<-subset(d, subset=(plot==input$variable))
-  #  p<-plotSensorSpeed(d, input$variable)
-  #  print(p)
-  #})
-  
-  output$speedPlot <- renderPlot({
-    #if(input$site == 'SRC'){
-      #db<-'/home/natalie/test/src.sqlite'
-    #}
-    #else if(input$site == 'BSB'){
-      #db<-'/home/natalie/test/bsb.sqlite'
-    #}
-   library(ggplot2)
-   db<-'/home/natalie/test/src.sqlite'
-   start_time = '2011-08-15 06:00:00'
-   end_time = '2011-08-20 06:00:00'
-   data<-dbFetchAll(db, start_time, end_time)
-   
-   s<-subset(data, subset=(plot_id=='K2'))
-   
-   s$date_time2<-as.POSIXct(strptime(s[,"date_time"], '%Y-%m-%d %H:%M:%S'))
-
-   p<-ggplot(s, aes(x=date_time2, y=wind_speed)) + 
-      geom_point(shape=19, size=1.5, color='blue') + 
-      theme_bw() +
-      xlab("Time") + 
-      ylab("Observed Speed (m/s)")
-  
-   p<-p + scale_x_datetime(breaks=c(min(s$date_time2),
-                       (max(s$date_time2) - min(s$date_time2))/4 + min(s$date_time2),
-                       (max(s$date_time2) - min(s$date_time2))/4*2 + min(s$date_time2),
-                       (max(s$date_time2) - min(s$date_time2))/4*3 + min(s$date_time2),
-                       max(s$date_time2)))
-
-   p <- p + theme(axis.text.x = element_text(angle = 45))
-   p <- p + theme(axis.text.x = element_text(vjust = 0.5))
-
-   p <- p + theme(axis.text = element_text(size = 14))
-   p <- p + theme(axis.title = element_text(size = 14))
-   
-   print(p)
-   
+  output$setDates <- renderUI({ 
+    if(input$site == 'SRC'){
+      dateRangeInput('daterange', 'Date range:', 
+                     start = "2011-08-10", #default start date
+                     end = "2011-08-15", #default end date
+                     min = src_mindate, 
+                     max = src_maxdate)
+    }
+    else if(input$site == 'BSB'){
+      dateRangeInput('daterange', 'Date range:', 
+                     start = "2010-08-15", #default start date
+                     end = "2010-08-20", #default end date
+                     min = bsb_mindate,
+                     max  = bsb_maxdate)
+    }
   })
-  
 
+  output$selectUI <- renderUI({
+    if(input$site == 'SRC'){
+      selectInput('variable', 'Choose a sensor:', src_plot_ids)
+    }
+    else if(input$site == 'BSB'){
+      selectInput('variable', 'Choose a Sensor:', bsb_plot_ids)
+    }
+  })
+
+
+  # Generate a plot of the requested sensor speed 
+  output$speedPlot <- renderPlot({
+     library(ggplot2)
+     if(input$site == 'SRC'){
+       start_time<-min(input$daterange)
+       end_time<-max(input$daterange)
+       s<-dbFetchSensor(db_src, input$variable, start_time, end_time)
+     }
+     else if(input$site == 'BSB'){
+       start_time<-min(input$daterange)
+       end_time<-max(input$daterange)
+       s<-dbFetchSensor(db_bsb, input$variable, start_time, end_time)
+       colnames(s)<-c("plot_id", "date_time", "wind_speed", "wind_gust", "wind_dir", "qualtiy", "sensor_qual")
+     }
+     
+     p<-shinyPlotSensorSpeed(s)
+     
+     print(p)
+  })
+
+  # Generate a summary of the data
+  output$summary <- renderPrint({
+    if(input$site == 'SRC'){
+         s<-dbFetchSensor(db_src, input$variable, min(input$daterange), max(input$daterange))
+    }
+    else if(input$site == 'BSB'){
+         s<-dbFetchSensor(db_bsb, input$variable, min(input$daterange), max(input$daterange))
+    }
+    summary(s)
+  })
+
+  # Generate an HTML table view of the data
+  output$table <- renderTable({
+    if(input$site == 'SRC'){
+         s<-dbFetchSensor(db_src, input$variable, min(input$daterange), max(input$daterange))
+    }
+    else if(input$site == 'BSB'){
+         s<-dbFetchSensor(db_bsb, input$variable, min(input$daterange), max(input$daterange))
+    }
+    data.frame(x=s)
+  })
 })
 
 
