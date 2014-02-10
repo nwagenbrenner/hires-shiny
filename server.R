@@ -4,10 +4,10 @@ library(RSQLite)
 
 #set some initial data
 #db_src<-'/FVS/shiny-server/shinyWindTools/src.sqlite'
-db_src<-'/home/natalie/test/src.sqlite'
+db_src<-'/home/natalie/src/hires-shiny/src.sqlite'
 
 #db_bsb<-'/FVS/shiny-server/shinyWindTools/bsb.sqlite'
-db_bsb<-'/home/natalie/test/bsb.sqlite'
+db_bsb<-'/home/natalie/src/hires-shiny/bsb.sqlite'
 
 #sloooow:
 #src_mindate<-dbFetch(db_src, "SELECT MINdate_time) FROM mean_flow_obs")
@@ -68,10 +68,31 @@ shinyServer(function(input, output) {
       selectInput('variable', 'Choose a sensor:', src_plot_ids)
     }
     else if(input$site == 'BSB'){
-      selectInput('variable', 'Choose a Sensor:', bsb_plot_ids)
+      selectInput('variable', 'Choose a sensor:', bsb_plot_ids)
     }
   })
-
+  
+  #Overview map of sites
+  output$overviewMap <- renderPlot({
+      library(maptools)
+      library(maps)
+      library(ggmap)
+      #-------------------------------------
+      #   make a US map with sites labeled
+      #-------------------------------------
+      xlim<-c(-125, -110)
+      ylim<-c(42, 49)
+      domain<-map("state", regions = c("idaho","Montana","Wyoming","oregon", "washington", "california", "Nevada", "utah",      "colorado", "new mexico", "arizona"), plot = FALSE, fill = TRUE)
+      IDs<-sub("^idaho,", "", domain$names)
+      domain_sp<-map2SpatialPolygons(domain, IDs, CRS("+proj=longlat"))
+      sites<-cbind(-113.0283, 43.40202)
+      sites<-rbind(sites, cbind(-116.2314, 45.40276))
+      sp<-SpatialPoints(sites, proj4string=CRS("+proj=longlat +datum=WGS84"))
+      plot(domain_sp, axes = TRUE, xlim=xlim, ylim=ylim)
+      plot(sp, add=TRUE, pch = 19)
+      text(-113, 43, "BSB")
+      text(-115.6, 45.1, "SRC")
+  })
 
   # Generate a plot of the requested sensor speed 
   output$speedPlot <- renderPlot({
